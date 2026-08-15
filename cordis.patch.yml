@@ -1,0 +1,7 @@
+# dsh-session-delete bundle patch
+#
+# One insert row: the plugin registers its host route (POST /session-delete/api/delete)
+# and its web client half (sidebar conversation menu injection).
+- insert:
+    - id: dsh-session-delete
+      name: 'dsh-session-delete'

@@ -1,0 +1,5 @@
+node_modules/
+*.log
+.DS_Store
+# Local deployment notes (machine-specific paths, not for distribution)
+DEPLOY-NOTES.md
