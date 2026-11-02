@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-delete",
-  "version": "0.1.0",
-  "description": "Permanently delete DSH sessions from the file system, right from the sidebar conversation menu (真正的物理删除，不是归档隐藏).",
+  "version": "0.2.0",
+  "description": "Permanently delete DSH sessions from disk, plus workspace-level archive-all / delete-all — right from the sidebar row menu. Updated for DSH >= 0.2.0-rc.2 menu DOM changes.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -32,9 +32,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/akira399/dsh-session-delete.git"
+    "url": "git+https://github.com/RightFS/dsh-session-delete.git"
   },
-  "homepage": "https://github.com/akira399/dsh-session-delete#readme",
+  "homepage": "https://github.com/RightFS/dsh-session-delete#readme",
   "license": "MIT",
   "keywords": [
     "dsh",
