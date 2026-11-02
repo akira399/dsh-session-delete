@@ -58,7 +58,6 @@ const { name, inject, apply } = plugin.default;
 
 check("host exports: name", () => assert.equal(name, "dsh-session-delete"));
 check("host exports: inject declares webServer", () => assert.ok(inject.includes("webServer")));
-check("host exports: inject declares shell", () => assert.ok(inject.includes("shell")));
 check("host exports: inject declares sessionPersistence", () => assert.ok(inject.includes("sessionPersistence")));
 check("host exports: inject declares workspaceRegistry", () => assert.ok(inject.includes("workspaceRegistry")));
 check("host exports: inject declares sessions", () => assert.ok(inject.includes("sessions")));
@@ -161,7 +160,6 @@ try {
 	/** Live session: skipped with error. */
 	await checkAsync("live session is skipped with 'live' code", async () => {
 		const handlers = mountPlugin({
-			shell: {},
 			sessions: {
 				get: (id) => (id === TARGET ? { id, header: { id, cwd: "/fixture" } } : void 0)
 			},
@@ -182,7 +180,6 @@ try {
 	/** Unknown session → 404. */
 	await checkAsync("unknown session → 404", async () => {
 		const handlers = mountPlugin({
-			shell: {},
 			sessions: { get: () => void 0 },
 			sessionPersistence: { list: async () => [] },
 			workspaceRegistry: {}
@@ -202,16 +199,9 @@ try {
 
 		const accounting = [];
 		const handlers = mountPlugin({
-			shell: {
-				resolve: async (spec) => spec,
-				run: async () => {
-					await rm(sessionDir, { recursive: true, force: true });
-					return { exitCode: 0, sandbox: {} };
-				}
-			},
 			sessions: { get: () => void 0 },
 			sessionPersistence: {
-				list: async () => [{ id: TARGET, cwd: "/fixture" }],
+				list: async () => [{ header: { id: TARGET, cwd: "/fixture" } }],
 				locate: (meta) => ({
 					kind: "jsonl",
 					path: join(tempRoot, meta.id, "session.jsonl.zstd")
@@ -249,20 +239,11 @@ try {
 		await writeFile(join(sessionDir2, "session.jsonl.zstd"), "f2", "utf8");
 
 		const handlers = mountPlugin({
-			shell: {
-				resolve: async (spec) => spec,
-				run: async (spec) => {
-					// Remove both directories
-					await rm(sessionDir1, { recursive: true, force: true });
-					await rm(sessionDir2, { recursive: true, force: true });
-					return { exitCode: 0, sandbox: {} };
-				}
-			},
 			sessions: { get: () => void 0 },
 			sessionPersistence: {
 				list: async () => [
-					{ id: "session-s1", cwd: "/fixture" },
-					{ id: "session-s2", cwd: "/fixture" }
+					{ header: { id: "session-s1", cwd: "/fixture" } },
+					{ header: { id: "session-s2", cwd: "/fixture" } }
 				],
 				locate: (meta) => ({
 					kind: "jsonl",
@@ -290,7 +271,6 @@ try {
 	await checkAsync("archive-all archives unarchived sessions", async () => {
 		const archived = [];
 		const handlers = mountPlugin({
-			shell: {},
 			sessions: { get: () => void 0 },
 			sessionPersistence: { list: async () => [] },
 			workspaceRegistry: {
