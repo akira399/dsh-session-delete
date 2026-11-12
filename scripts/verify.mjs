@@ -4,9 +4,10 @@
  * Checks:
  *  1. `node --check` syntax on both halves.
  *  2. Host plugin shape (name/inject/apply) and route behaviour through a
- *     mock ctx: method guard, sessionId validation, live-session rejection,
- *     unknown-session 404, and a REAL deletion of a fixture directory plus
- *     accounting cleanup.
+ *     mock ctx: trust fence (loopback fallback + official connection service),
+ *     method guard, sessionId validation, live-session handling, cold-session
+ *     snapshot lookup, unknown-session 404, and a REAL deletion of a fixture
+ *     directory plus accounting cleanup.
  *  3. Client bundle shape (ModuleLoader format, exports, service injects).
  *  4. Privacy scan: no tokens, no emails, no absolute local paths.
  *
@@ -148,6 +149,43 @@ try {
 		assert.equal(res.status, 403);
 	});
 
+	/** Route: reverse-proxy authority accepted through the official connection fence. */
+	await checkAsync("route: proxied authority accepted through the connection fence", async () => {
+		const calls = [];
+		const handler = mountPlugin({
+			connection: {
+				requestRejection: (req) => {
+					calls.push(req.headers.host);
+					return void 0;
+				}
+			},
+			sessions: { get: () => void 0 },
+			sessionPersistence: { list: async () => [] }
+		});
+		const res = makeRes();
+		await handler(makeReq({ sessionId: TARGET }, "POST", "/session-delete/api/delete", "192.168.1.35:3080"), res);
+		assert.deepEqual(calls, ["192.168.1.35:3080"]);
+		assert.equal(res.status, 404);
+		assert.equal(res.json.error.code, "session-not-found");
+	});
+
+	/** Route: the connection fence rejection keeps its HTTP meaning. */
+	await checkAsync("route: connection fence rejection → 403", async () => {
+		const handler = mountPlugin({ connection: { requestRejection: () => 403 } });
+		const res = makeRes();
+		await handler(makeReq({ sessionId: TARGET }, "POST", "/session-delete/api/delete", "192.168.1.35:3080"), res);
+		assert.equal(res.status, 403);
+		assert.equal(res.json.error.code, "forbidden");
+	});
+
+	await checkAsync("route: unauthenticated connection fence → 401", async () => {
+		const handler = mountPlugin({ connection: { requestRejection: () => 401 } });
+		const res = makeRes();
+		await handler(makeReq({ sessionId: TARGET }, "POST", "/session-delete/api/delete", "192.168.1.35:3080"), res);
+		assert.equal(res.status, 401);
+		assert.equal(res.json.error.code, "unauthorized");
+	});
+
 	/** Route: unknown endpoint. */
 	await checkAsync("route: unknown endpoint rejected with 404", async () => {
 		const handler = mountPlugin({});
@@ -283,7 +321,7 @@ try {
 		const handler = mountPlugin({
 			sessions: { get: () => void 0 },
 			sessionPersistence: {
-				list: async () => [{ id: TARGET, cwd: "/fixture" }],
+				list: async () => [{ header: { id: TARGET, cwd: "/fixture" }, revision: "r1", sizeBytes: 10 }],
 				locate: (meta) => ({
 					kind: "jsonl",
 					path: join(tempRoot, meta.id, "session.jsonl.zstd")
@@ -322,7 +360,7 @@ try {
 		const handler = mountPlugin({
 			sessions: { get: () => void 0 },
 			sessionPersistence: {
-				list: async () => [{ id: TARGET, cwd: "/fixture" }],
+				list: async () => [{ header: { id: TARGET, cwd: "/fixture" }, revision: "r1", sizeBytes: 10 }],
 				locate: (meta) => ({
 					kind: "jsonl",
 					path: join(tempRoot, meta.id, "session.jsonl.zstd")
@@ -352,6 +390,15 @@ check("client: inject declares sessions/workspaces/connection", () => {
 	assert.match(client, /"sessions"/);
 	assert.match(client, /"workspaces"/);
 	assert.match(client, /"connection"/);
+});
+check("client: never refreshes the stream-backed Workspace store", () => {
+	// The workspaces service is a live stream snapshot store; it has no
+	// refresh() method, so calling one aborted the success path after a
+	// deletion that had already happened on disk.
+	assert.doesNotMatch(client, /ctx\.workspaces\.refresh\(/);
+});
+check("client: Session list refresh is feature-detected", () => {
+	assert.match(client, /typeof ctx\.sessions\.refresh === "function"/);
 });
 
 /** ------------------------------------------------------------------ */
