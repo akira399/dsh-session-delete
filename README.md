@@ -44,7 +44,8 @@ npx -p @deepseek-ai/dsh dsh plugin --profile web add <owner>/dsh-session-delete
 DSH 官方没有为会话行菜单提供扩展 slot，本插件采用 host + client 双半端实现：
 
 - **Host 半端**（`lib/index.js`）：注册本地路由 `POST /session-delete/api/delete`。
-  - 校验 `sessionId`（严格 `session-<uuid>` 格式，杜绝路径穿越）与请求来源（仅 localhost）；
+  - 校验 `sessionId`（严格 `session-<uuid>` 格式，杜绝路径穿越）与请求来源：复用 DSH 官方 `connection` 服务的 Host/Origin 围栏与浏览器会话认证（旧版本 DSH 无该服务时回退到仅 localhost）；
+  - 冷会话（不在内存中）的 header 通过官方 `sessionPersistence.list()` 的 `{ header, revision, sizeBytes, location }` 快照解析；
   - 若会话在内存中（打开/运行）：通过官方 `agents` 服务取消当前 turn，再通过 `sessions` store 的标准 `detach()` 路径摘除内存会话（触发官方 `host/session-removed` 帧），防止内存日志把文件"复活"；
   - 通过官方 `sessionPersistence.locate()` 定位会话目录（`~/.dsh/sessions/<workspace-key>/session-<uuid>/`），递归删除；
   - 通过官方 `workspaceRegistry` 的操作队列清理记账（workspace 的 `sessionIds` 席位与全局归档集合），前端经官方 `domain/changed` 帧自动同步。
@@ -52,7 +53,7 @@ DSH 官方没有为会话行菜单提供扩展 slot，本插件采用 host + cli
 
 ## 安全与边界
 
-- 删除请求仅接受来自 localhost 的访问（DSH Web 同源页面）；
+- 删除请求复用 DSH Web 自身的信任围栏：仅接受来自 `trustedHosts`（或本机回环地址）且已通过浏览器会话认证的同源请求，反向代理（如 nginx 局域网入口）部署也可正常工作；
 - `sessionId` 严格校验为 `session-<uuid>` 格式，杜绝路径穿越；
 - 附件（图片等）是跨会话共享资源，**不随会话删除**，避免破坏其他会话的引用；
 - 运行中会话的删除需要先中止其回复（不可恢复的操作，确认框中已明确提示）；
@@ -69,6 +70,8 @@ DSH 官方没有为会话行菜单提供扩展 slot，本插件采用 host + cli
 | --- | --- |
 | 点击后提示"无法识别该会话" | 侧边栏行与数据快照短暂不一致时可能出现；刷新页面后重试即可（控制台会输出诊断信息） |
 | 提示"该会话当前处于打开状态且无法从内存移除" | 极少数情况下内存摘除不可用，重启 DSH 后即可正常删除 |
+| 通过 nginx 等反向代理访问时提示"删除失败：forbidden" | 旧版本只接受 localhost 的请求；当前实现复用 DSH 的 `connection` 信任围栏，请确认启动参数里用 `--trusted-host` 声明了代理访问的 authority |
+| 侧边栏能看到会话，删除时却提示"会话不存在" | 旧版本把 `sessionPersistence.list()` 的返回值当成 header 数组；当前实现按 `header.id` 解析，冷会话也可正常删除 |
 | 删除后磁盘占用没有减少 | 附件为跨会话共享资源，不会被删除；仅会话日志目录被移除 |
 
 ## 免责声明
